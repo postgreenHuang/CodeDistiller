@@ -149,4 +149,4 @@ python main.py
 
 ## License
 
-MIT
+MIT License — 自由使用、修改和分发。
