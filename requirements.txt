@@ -1,0 +1,8 @@
+PySide6>=6.5
+python-dotenv
+google-generativeai
+openai
+anthropic
+requests
+Pillow
+pyinstaller
