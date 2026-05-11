@@ -3,6 +3,9 @@
 <p align="center">
 把陌生代码工程蒸馏成结构化技术文档，然后和一位"已经读完整个项目"的 AI 导师持续对话。
 </p>
+<img width="1028" height="777" alt="图片" src="https://github.com/user-attachments/assets/a3abbd5e-5c36-42c3-88a8-7c44509435ca" />
+<img width="1033" height="778" alt="图片" src="https://github.com/user-attachments/assets/ebdc3cf5-dae4-4606-8d28-8381fbecbc4b" />
+
 
 <br>
 
