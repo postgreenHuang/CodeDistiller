@@ -150,6 +150,7 @@ class ChatSession:
         reply = ""
         extra_context = []
         total_read_chars = 0
+        all_read_files: list[tuple[str, str]] = []  # (rel_path, full_path)
 
         for round_num in range(_MAX_AGENT_ROUNDS):
             api_messages = self._build_budgeted_messages()
@@ -188,6 +189,7 @@ class ChatSession:
                     on_status("fallback")
                 continue
 
+            all_read_files.extend(resolved)
             if on_read_files:
                 on_read_files([r[0] for r in resolved])
             if on_status:
@@ -210,6 +212,10 @@ class ChatSession:
             extra_context.append({"role": "user", "content": file_contents})
 
         reply = _READ_PATTERN.sub('', reply).strip()
+        if all_read_files:
+            header = self._build_read_files_header(all_read_files)
+            if header:
+                reply = header + "\n" + reply
 
         self.messages.append({"role": "assistant", "content": reply})
         self._save_history()
@@ -394,6 +400,64 @@ class ChatSession:
 
         header = f"以下是请求的 {len(parts)} 个文件的内容：\n\n"
         return header + "\n\n".join(parts), total_chars
+
+    def _build_read_files_header(self, read_files: list[tuple[str, str]]) -> str:
+        """构建读取文件的摘要头部"""
+        seen: set[str] = set()
+        unique: list[tuple[str, str]] = []
+        for rel, full in read_files:
+            if rel not in seen:
+                seen.add(rel)
+                unique.append((rel, full))
+        if not unique:
+            return ""
+
+        file_names = [f"`{rel}`" for rel, _ in unique]
+        lines = [f"> 📖 **读取了 {len(unique)} 个文件:** {' · '.join(file_names)}"]
+
+        relationships = self._find_file_relationships(unique)
+        if relationships:
+            lines.append(f"> 🔗 {' · '.join(relationships)}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _find_file_relationships(files: list[tuple[str, str]]) -> list[str]:
+        """分析读取文件之间的 import 关系"""
+        if len(files) < 2:
+            return []
+
+        stem_map: dict[str, str] = {}
+        for rel, _ in files:
+            stem_map[Path(rel).stem] = rel
+
+        py_re = re.compile(r'(?:from\s+([\w.]+)\s+import|import\s+([\w.,\s]+))')
+        js_re = re.compile(r'(?:from\s+[\'"]([^\'"]+)[\'"]|require\(\s*[\'"]([^\'"]+)[\'"]\s*\))')
+
+        relationships: list[str] = []
+        seen_pairs: set[tuple[str, str]] = set()
+
+        for rel_path, full_path in files:
+            try:
+                content = Path(full_path).read_text(encoding="utf-8", errors="ignore")[:8000]
+            except Exception:
+                continue
+            for line in content.splitlines()[:100]:
+                for pattern in (py_re, js_re):
+                    m = pattern.search(line)
+                    if not m:
+                        continue
+                    for g in m.groups():
+                        if not g:
+                            continue
+                        base = g.split(',')[0].strip().split('.')[0]
+                        if base in stem_map and stem_map[base] != rel_path:
+                            pair = (rel_path, stem_map[base])
+                            if pair not in seen_pairs:
+                                seen_pairs.add(pair)
+                                relationships.append(f"`{pair[0]}` → `{pair[1]}`")
+
+        return relationships
 
     def _get_project_file_list(self) -> str:
         """获取项目文件列表（带缓存），用于帮助 AI 定位正确路径"""
